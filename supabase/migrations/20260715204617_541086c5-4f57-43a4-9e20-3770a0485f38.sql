@@ -1,0 +1,11 @@
+REVOKE SELECT ON public.orders FROM anon;
+REVOKE SELECT ON public.order_items FROM anon;
+REVOKE SELECT ON public.inventory_units FROM anon;
+REVOKE SELECT ON public.inventory_unit_events FROM anon;
+REVOKE SELECT ON public.notifications FROM anon;
+REVOKE SELECT ON public.qr_print_jobs FROM anon;
+REVOKE SELECT ON public.qr_print_job_items FROM anon;
+REVOKE SELECT ON public.shipments FROM anon;
+REVOKE SELECT ON public.stock_batches FROM anon;
+REVOKE SELECT ON public.user_roles FROM anon;
+REVOKE SELECT ON public.postcards FROM anon;

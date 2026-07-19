@@ -1,0 +1,236 @@
+import { useState } from "react";
+import { motion } from "framer-motion";
+import { Package, Calendar, CheckCircle, ChevronDown, ChevronUp, ShoppingBag, Mail, MessageSquare, User } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+
+interface InventoryCard {
+  id: string;
+  business_status: string | null;
+  registered_at: string | null;
+  country_name: string | null;
+  design_title: string | null;
+  view_no: number;
+  recipient_name: string | null;
+  recipient_message: string | null;
+  recipient_email: string | null;
+  contact_opt_in: boolean;
+}
+
+interface MyPostcardsProps {
+  userId: string;
+}
+
+const statusLabels: Record<string, { label: string; color: string; icon: typeof Package }> = {
+  purchased: { label: "Zakupiona", color: "text-[hsl(var(--gold))]", icon: ShoppingBag },
+  registered: { label: "Zarejestrowana", color: "text-accent", icon: CheckCircle },
+};
+
+interface MyPostcardsUnitJoin {
+  id: string;
+  business_status: string | null;
+  registered_at: string | null;
+  card_designs: {
+    title: string | null;
+    view_no: number;
+    countries: {
+      name_pl: string;
+    } | null;
+  } | null;
+}
+
+interface TravelerRegistrationRow {
+  inventory_unit_id: string;
+  recipient_name: string | null;
+  recipient_message: string | null;
+  recipient_email: string | null;
+  contact_opt_in: boolean | null;
+}
+
+const fetchPostcards = async (userId: string): Promise<InventoryCard[]> => {
+  const { data: units, error } = await supabase
+    .from('inventory_units')
+    .select(`
+      id, business_status, registered_at,
+      card_designs!inner(title, view_no, countries!inner(name_pl))
+    `)
+    .eq('traveler_user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  if (!units) return [];
+
+  const typedUnits = units as unknown as MyPostcardsUnitJoin[];
+  const unitIds = typedUnits.filter((u) => u.business_status === 'registered').map((u) => u.id);
+
+  const registrations: Record<string, { recipient_name: string; recipient_message: string | null; recipient_email: string | null; contact_opt_in: boolean }> = {};
+
+  if (unitIds.length > 0) {
+    // Use the masked view to enforce email privacy at database level
+    const { data: regs } = await supabase
+      .from('traveler_registrations_view')
+      .select('inventory_unit_id, recipient_name, recipient_message, recipient_email, contact_opt_in')
+      // recipient_email is masked to null by the view unless contact_opt_in = true
+      .in('inventory_unit_id', unitIds);
+
+    if (regs) {
+      const typedRegs = regs as unknown as TravelerRegistrationRow[];
+      typedRegs.forEach((r) => {
+        registrations[r.inventory_unit_id] = {
+          recipient_name: r.recipient_name || "",
+          recipient_message: r.recipient_message,
+          recipient_email: r.recipient_email,
+          contact_opt_in: r.contact_opt_in || false,
+        };
+      });
+    }
+  }
+
+  return typedUnits.map((u) => {
+    const reg = registrations[u.id];
+    return {
+      id: u.id,
+      business_status: u.business_status,
+      registered_at: u.registered_at,
+      country_name: u.card_designs?.countries?.name_pl || null,
+      design_title: u.card_designs?.title || null,
+      view_no: u.card_designs?.view_no ?? 0,
+      recipient_name: reg?.recipient_name || null,
+      recipient_message: reg?.recipient_message || null,
+      recipient_email: reg?.recipient_email || null, // Already masked by database view
+      contact_opt_in: reg?.contact_opt_in || false,
+    };
+  });
+};
+
+const MyPostcards = ({ userId }: MyPostcardsProps) => {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<'all' | 'purchased' | 'registered'>('all');
+
+  const { data: cards = [], isLoading } = useQuery({
+    queryKey: ['postcards', userId],
+    queryFn: () => fetchPostcards(userId),
+  });
+
+  const filteredCards = cards.filter(c => filter === 'all' || c.business_status === filter);
+
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return "";
+    return new Date(dateStr).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short', year: 'numeric' });
+  };
+
+  if (isLoading) {
+    return <div className="text-center py-12"><div className="animate-pulse text-muted-foreground">Ładowanie...</div></div>;
+  }
+
+  if (cards.length === 0) {
+    return (
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center py-12">
+        <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+          <Package className="w-8 h-8 text-muted-foreground" />
+        </div>
+        <h3 className="font-display text-xl font-semibold text-foreground mb-2">Brak przypisanych kartek</h3>
+        <p className="text-muted-foreground max-w-md mx-auto">Kartki pojawią się tutaj po realizacji zamówienia.</p>
+      </motion.div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex gap-2 flex-wrap">
+        <button onClick={() => setFilter('all')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${filter === 'all' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'}`}>
+          Wszystkie ({cards.length})
+        </button>
+        <button onClick={() => setFilter('purchased')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${filter === 'purchased' ? 'bg-[hsl(var(--gold))] text-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'}`}>
+          Zakupione ({cards.filter(c => c.business_status === 'purchased').length})
+        </button>
+        <button onClick={() => setFilter('registered')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${filter === 'registered' ? 'bg-accent text-accent-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'}`}>
+          Zarejestrowane ({cards.filter(c => c.business_status === 'registered').length})
+        </button>
+      </div>
+
+      <div className="space-y-4">
+        {filteredCards.map((card, index) => {
+          const status = statusLabels[card.business_status || 'purchased'] || statusLabels.purchased;
+          const StatusIcon = status.icon;
+          const isExpanded = expandedId === card.id;
+
+          return (
+            <motion.div key={card.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }}
+              className="bg-card rounded-xl shadow-soft overflow-hidden">
+              <button onClick={() => setExpandedId(isExpanded ? null : card.id)}
+                className="w-full p-4 flex items-center gap-4 text-left hover:bg-muted/30 transition-colors">
+                <div className="w-14 h-14 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+                  <span className="text-3xl">🇵🇱</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-medium text-sm text-foreground">{card.country_name}</span>
+                    <span className="text-xs text-muted-foreground">Widok #{card.view_no}</span>
+                    <span className={`flex items-center gap-1 text-xs font-medium ${status.color}`}>
+                      <StatusIcon className="w-3 h-3" />{status.label}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground truncate">{card.design_title}</p>
+                </div>
+                <div className="flex-shrink-0">
+                  {isExpanded ? <ChevronUp className="w-5 h-5 text-muted-foreground" /> : <ChevronDown className="w-5 h-5 text-muted-foreground" />}
+                </div>
+              </button>
+
+              {isExpanded && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} className="border-t border-border">
+                  <div className="p-4 space-y-3">
+                    {card.business_status === 'registered' && card.recipient_name && (
+                      <div className="bg-accent/10 rounded-lg p-4 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <User className="w-4 h-4 text-accent" />
+                          <span className="text-sm font-medium text-foreground">{card.recipient_name}</span>
+                        </div>
+                        {card.recipient_message && (
+                          <div className="flex items-start gap-2">
+                            <MessageSquare className="w-4 h-4 text-muted-foreground mt-0.5" />
+                            <p className="text-sm text-foreground italic">"{card.recipient_message}"</p>
+                          </div>
+                        )}
+                        {card.recipient_email && (
+                          <div className="flex items-center gap-2">
+                            <Mail className="w-4 h-4 text-muted-foreground" />
+                            <a href={`mailto:${card.recipient_email}`} className="text-sm text-primary hover:underline">{card.recipient_email}</a>
+                          </div>
+                        )}
+                        {card.registered_at && (
+                          <div className="flex items-center gap-2">
+                            <Calendar className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-xs text-muted-foreground">{formatDate(card.registered_at)}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="text-muted-foreground">Kraj</p>
+                        <p className="font-medium text-foreground">{card.country_name}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Widok</p>
+                        <p className="font-medium text-foreground">#{card.view_no}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Status</p>
+                        <p className={`font-medium ${status.color} flex items-center gap-1`}><StatusIcon className="w-4 h-4" />{status.label}</p>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </motion.div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+export default MyPostcards;

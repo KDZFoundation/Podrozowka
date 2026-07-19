@@ -1,0 +1,20 @@
+project_id = "uacuxblipehehknafwep"
+
+[functions.register-postcard]
+verify_jwt = false
+
+
+[functions.generate-qr]
+verify_jwt = false
+
+[functions.generate-qr-pdf]
+verify_jwt = false
+
+[functions.p24-webhook]
+verify_jwt = false
+
+[functions.issue-fiscal-document]
+verify_jwt = false
+
+[functions.fiscal-document-pdf]
+verify_jwt = false

@@ -1,0 +1,1 @@
+DROP POLICY IF EXISTS "Anyone can register a postcard" ON public.recipient_registrations;
