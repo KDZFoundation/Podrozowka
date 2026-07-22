@@ -5,7 +5,8 @@ export type FeatureFlagKey =
   | "travel_stats"
   | "wall_of_connections"
   | "travelers_journal"
-  | "cultural_missions";
+  | "cultural_missions"
+  | "cod_payment_enabled";
 
 export type FeatureFlags = Record<FeatureFlagKey, boolean>;
 
@@ -14,6 +15,7 @@ const DEFAULT_FLAGS: FeatureFlags = {
   wall_of_connections: false,
   travelers_journal: false,
   cultural_missions: false,
+  cod_payment_enabled: true,
 };
 
 interface FeatureFlagRow {

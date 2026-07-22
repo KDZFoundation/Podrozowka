@@ -1,4 +1,4 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient, SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { buildCorsHeaders } from "../_shared/cors.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -13,7 +13,9 @@ const P24_SANDBOX_ENV = (Deno.env.get("P24_SANDBOX") || "true").toLowerCase() ==
 
 async function resolveP24Mode(): Promise<boolean> {
   try {
-    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
     const { data } = await admin
       .from("payment_settings")
       .select("p24_mode")
@@ -26,6 +28,24 @@ async function resolveP24Mode(): Promise<boolean> {
 
 const SHIPPING_COST_GROSZE = 1399;
 const COD_SHIPPING_COST_GROSZE = 1699;
+
+async function ensureAndGetCodFlag(serviceClient: SupabaseClient): Promise<boolean> {
+  try {
+    const { data, error } = await serviceClient
+      .from("feature_flags")
+      .select("is_enabled")
+      .eq("key", "cod_payment_enabled")
+      .maybeSingle();
+
+    if (error || !data) {
+      return false;
+    }
+    return !!data.is_enabled;
+  } catch (err) {
+    console.error("Error checking feature flag:", err);
+    return false;
+  }
+}
 
 async function sha384Hex(input: string): Promise<string> {
   const buf = new TextEncoder().encode(input);
@@ -71,6 +91,7 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false, autoRefreshToken: false },
     });
 
     const token = authHeader.replace("Bearer ", "");
@@ -142,6 +163,17 @@ Deno.serve(async (req) => {
       return jsonResp({ error: "invalid_payment_method" }, 400);
     }
     const paymentMethod: "online" | "cod" = paymentMethodRaw;
+
+    if (paymentMethod === "cod") {
+      const serviceClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+      const codEnabled = await ensureAndGetCodFlag(serviceClient);
+      if (!codEnabled) {
+        return jsonResp({ error: "cod_payment_disabled" }, 400);
+      }
+    }
+
     const expectedShipping = paymentMethod === "cod" ? COD_SHIPPING_COST_GROSZE : SHIPPING_COST_GROSZE;
     if (shippingCostGrosze !== expectedShipping) {
       return jsonResp({ error: "invalid_shipping_cost" }, 400);

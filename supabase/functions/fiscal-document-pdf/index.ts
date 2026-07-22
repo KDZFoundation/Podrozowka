@@ -54,6 +54,7 @@ Deno.serve(async (req) => {
 
     const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false, autoRefreshToken: false },
     });
     const token = authHeader.replace("Bearer ", "");
     const { data: claimsData, error: claimsErr } = await userClient.auth.getClaims(token);
@@ -65,7 +66,7 @@ Deno.serve(async (req) => {
     if (!orderNumber) return textResp("missing order", 400);
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-      auth: { persistSession: false },
+      auth: { persistSession: false, autoRefreshToken: false },
     });
 
     const { data: order, error: orderErr } = await admin

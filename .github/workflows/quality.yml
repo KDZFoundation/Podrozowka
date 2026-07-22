@@ -1,0 +1,52 @@
+name: Quality Gate
+
+on:
+  push:
+    branches:
+      - main
+      - uat
+      - production
+  pull_request:
+    branches:
+      - main
+      - uat
+      - production
+
+jobs:
+  quality-gate:
+    name: Quality Gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Lint code
+        run: npm run lint
+
+      - name: Run tests
+        run: npm run test
+
+      - name: Build application
+        run: |
+          if [ "${{ github.ref_name }}" = "uat" ]; then
+            npm run build:uat
+          elif [ "${{ github.ref_name }}" = "production" ]; then
+            npm run build:prod
+          elif [ "${{ github.ref_name }}" = "main" ]; then
+            npm run build:dev
+          else
+            npm run build
+          fi

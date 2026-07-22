@@ -52,7 +52,7 @@ const AdminDevTools = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { user, isDbAdmin } = useAuth();
 
   const generateMockData = async () => {
     if (!user) return;
@@ -131,10 +131,13 @@ const AdminDevTools = () => {
       const orderIds: string[] = [];
       for (let i = 0; i < 3; i++) {
         const buyer = MOCK_BUYERS[i];
+        const dateStr = new Date().toISOString().slice(2, 10).replace(/-/g, ""); // YYMMDD
+        const customOrderNumber = `PDZ-${dateStr}-${randomHex(6).toUpperCase()}`;
         const { data, error } = await supabase
           .from("orders")
           .insert({
             user_id: user.id,
+            order_number: customOrderNumber,
             status: "paid" as const,
             payment_status: "paid" as const,
             total_amount: (i + 1) * 29.99,
@@ -214,7 +217,12 @@ const AdminDevTools = () => {
       queryClient.invalidateQueries();
     } catch (err) {
       console.error("Mock data error:", err);
-      const errorMsg = err instanceof Error ? err.message : "Nieznany błąd";
+      let errorMsg = err instanceof Error ? err.message : "Nieznany błąd";
+      if (errorMsg.includes("row-level security") || errorMsg.includes("security policy")) {
+        errorMsg = "Brak uprawnień administratora w bazie danych (RLS). Zobacz żółty komunikat na górze panelu administratora i wykonaj wymagany skrypt SQL.";
+      } else if (errorMsg.includes("gamification_config") || errorMsg.includes("relation \"") || errorMsg.includes("does not exist")) {
+        errorMsg = "Brakuje tabel grywalizacji w bazie danych (gamification_config / gamification_tiers). Uruchom skrypt SQL podany w żółtym komunikacie na górze panelu administratora, aby utworzyć wymagane tabele.";
+      }
       toast.error("Błąd generowania danych: " + errorMsg);
     } finally {
       setIsGenerating(false);
@@ -318,7 +326,12 @@ const AdminDevTools = () => {
       queryClient.invalidateQueries();
     } catch (err) {
       console.error("Seed global error:", err);
-      const errorMsg = err instanceof Error ? err.message : "Nieznany błąd";
+      let errorMsg = err instanceof Error ? err.message : "Nieznany błąd";
+      if (errorMsg.includes("row-level security") || errorMsg.includes("security policy")) {
+        errorMsg = "Brak uprawnień administratora w bazie danych (RLS). Zobacz żółty komunikat na górze panelu administratora i wykonaj wymagany skrypt SQL.";
+      } else if (errorMsg.includes("gamification_config") || errorMsg.includes("relation \"") || errorMsg.includes("does not exist")) {
+        errorMsg = "Brakuje tabel grywalizacji w bazie danych (gamification_config / gamification_tiers). Uruchom skrypt SQL podany w żółtym komunikacie na górze panelu administratora, aby utworzyć wymagane tabele.";
+      }
       toast.error("Błąd: " + errorMsg);
     } finally {
       setIsSeeding(false);

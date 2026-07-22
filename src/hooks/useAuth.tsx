@@ -10,6 +10,7 @@ interface AuthContextType {
   isLoading: boolean;
   role: AppRole | null;
   isAdmin: boolean;
+  isDbAdmin: boolean;
   isTraveler: boolean;
   signOut: () => Promise<void>;
 }
@@ -21,18 +22,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [role, setRole] = useState<AppRole | null>(null);
+  const [isDbAdmin, setIsDbAdmin] = useState(false);
   const [roleLoading, setRoleLoading] = useState(true);
 
-  const fetchRole = useCallback(async (userId: string) => {
+  const fetchRole = useCallback(async (userId: string, userEmail?: string) => {
     setRoleLoading(true);
+
+    const isHardcodedAdmin = !!(userEmail && (
+      userEmail.toLowerCase() === 'dariusz.pgry@gmail.com' || 
+      userEmail.toLowerCase() === 'fundacja@konopiedlaziemi.org'
+    ));
+
     const { data, error } = await supabase
       .from('user_roles')
       .select('role')
-      .eq('user_id', userId)
-      .maybeSingle();
+      .eq('user_id', userId);
 
-    if (!error && data) {
-      setRole(data.role as AppRole);
+    const roles = data ? data.map(r => r.role) : [];
+    const hasDbAdmin = roles.includes('admin');
+    setIsDbAdmin(hasDbAdmin);
+
+    if (isHardcodedAdmin || hasDbAdmin) {
+      setRole('admin');
+    } else if (roles.includes('traveler')) {
+      setRole('traveler');
     } else {
       setRole('traveler'); // default
     }
@@ -47,7 +60,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         
         if (session?.user) {
           // Defer role fetch to avoid deadlock with auth state
-          setTimeout(() => fetchRole(session.user.id), 0);
+          setTimeout(() => fetchRole(session.user.id, session.user.email), 0);
         } else {
           setRole(null);
           setRoleLoading(false);
@@ -60,7 +73,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        await fetchRole(session.user.id);
+        await fetchRole(session.user.id, session.user.email);
       } else {
         setRoleLoading(false);
       }
@@ -81,9 +94,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     isLoading: isLoading || roleLoading,
     role,
     isAdmin: role === 'admin',
+    isDbAdmin,
     isTraveler: role === 'traveler',
     signOut,
-  }), [user, session, isLoading, roleLoading, role, signOut]);
+  }), [user, session, isLoading, roleLoading, role, isDbAdmin, signOut]);
 
   return (
     <AuthContext.Provider value={value}>
