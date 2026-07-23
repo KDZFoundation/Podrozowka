@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useCart } from "@/contexts/CartContext";
 import { useCheckout } from "@/contexts/CheckoutContext";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, supabaseUrl } from "@/integrations/supabase/client";
 
 const formatPln = (v: number) =>
   v.toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " zł";
@@ -212,7 +212,7 @@ const CheckoutConfirmation = () => {
                                   toast.error("Zaloguj się ponownie, aby pobrać dokument.");
                                   return;
                                 }
-                                const url = `${(import.meta.env as { VITE_SUPABASE_URL?: string }).VITE_SUPABASE_URL}/functions/v1/fiscal-document-pdf?order=${encodeURIComponent(order.order_number)}`;
+                                const url = `${supabaseUrl}/functions/v1/fiscal-document-pdf?order=${encodeURIComponent(order.order_number)}`;
                                 const res = await fetch(url, {
                                   headers: { Authorization: `Bearer ${session.access_token}` },
                                 });

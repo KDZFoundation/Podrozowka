@@ -12,6 +12,13 @@ interface FeatureFlag {
   is_enabled: boolean;
 }
 
+const KNOWN_FLAGS = [
+  { key: "travel_stats", name: "Statystyki Kilometrów", description: "Liczenie dystansu kartek od Warszawy", is_enabled: false },
+  { key: "wall_of_connections", name: "Ściana Relacji", description: "Galeria zdjęć z rejestracji", is_enabled: false },
+  { key: "travelers_journal", name: "Dziennik Ambasadora", description: "Oś czasu relacji", is_enabled: false },
+  { key: "cultural_missions", name: "Misje Kulturowe", description: "Wyzwania dla podróżników", is_enabled: false }
+];
+
 const AdminLab = () => {
   const queryClient = useQueryClient();
   const [togglingKey, setTogglingKey] = useState<string | null>(null);
@@ -24,6 +31,26 @@ const AdminLab = () => {
         .select("*")
         .order("name");
       if (error) throw error;
+
+      const existingKeys = new Set((data || []).map((f) => f.key));
+      const missingFlags = KNOWN_FLAGS.filter((kf) => !existingKeys.has(kf.key));
+
+      if (missingFlags.length > 0) {
+        const { error: insertError } = await supabase
+          .from("feature_flags")
+          .insert(missingFlags);
+        
+        if (!insertError) {
+          const { data: refetchedData, error: refetchError } = await supabase
+            .from("feature_flags")
+            .select("*")
+            .order("name");
+          if (!refetchError && refetchedData) {
+            return refetchedData as FeatureFlag[];
+          }
+        }
+      }
+
       return data as FeatureFlag[];
     },
   });
