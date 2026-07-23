@@ -134,7 +134,7 @@ Deno.serve(async (req) => {
 
   let orderId: string | null = null;
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false },
+    auth: { persistSession: false, autoRefreshToken: false },
   });
 
   try {

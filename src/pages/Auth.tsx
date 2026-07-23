@@ -20,12 +20,22 @@ interface AuthProps {
 }
 
 const resolveDefaultRedirect = async (userId: string): Promise<string> => {
+  const { data: { session } } = await supabase.auth.getSession();
+  const userEmail = session?.user?.email;
+  if (userEmail && (
+    userEmail.toLowerCase() === 'dariusz.pgry@gmail.com' || 
+    userEmail.toLowerCase() === 'fundacja@konopiedlaziemi.org'
+  )) {
+    return "/dashboard";
+  }
+
   const { data } = await supabase
     .from("user_roles")
     .select("role")
-    .eq("user_id", userId)
-    .maybeSingle();
-  return data?.role === "admin" ? "/dashboard" : "/";
+    .eq("user_id", userId);
+  
+  const roles = data ? data.map(r => r.role) : [];
+  return roles.includes("admin") ? "/dashboard" : "/";
 };
 
 const Auth = ({ mode = "login" }: AuthProps) => {

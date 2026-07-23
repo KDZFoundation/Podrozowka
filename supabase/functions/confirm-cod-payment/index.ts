@@ -32,6 +32,7 @@ Deno.serve(async (req) => {
 
     const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false, autoRefreshToken: false },
     });
     const token = authHeader.replace("Bearer ", "");
     const { data: claims, error: claimsErr } = await userClient.auth.getClaims(token);
@@ -50,7 +51,7 @@ Deno.serve(async (req) => {
     if (!isUuid(orderId)) return jsonResp({ error: "invalid_order_id" }, 400);
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-      auth: { persistSession: false },
+      auth: { persistSession: false, autoRefreshToken: false },
     });
 
     const { data: order, error: fetchErr } = await admin
@@ -62,7 +63,7 @@ Deno.serve(async (req) => {
     if (order.payment_method !== "cod") return jsonResp({ error: "not_cod_order" }, 400);
     if (order.payment_status === "paid") {
       // Idempotent — already confirmed.
-      return jsonResp({ ok: true, already_paid: true });
+      return jsonResp({ ok: true, already_confirmed: true });
     }
     if (order.payment_status !== "unpaid") {
       return jsonResp({ error: "invalid_payment_status" }, 400);
@@ -82,7 +83,7 @@ Deno.serve(async (req) => {
     }
     if (!updated) {
       // Someone else confirmed in parallel — treat as success.
-      return jsonResp({ ok: true, already_paid: true });
+      return jsonResp({ ok: true, already_confirmed: true });
     }
 
     // Fire-and-forget fiscal document.

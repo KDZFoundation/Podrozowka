@@ -1,6 +1,8 @@
 import { CreditCard, Banknote } from "lucide-react";
 import type { PaymentMethod } from "@/lib/constants";
 import { SHIPPING_COST_GROSZE, COD_SHIPPING_COST_GROSZE } from "@/lib/constants";
+import { useFeatureFlag } from "@/hooks/useFeatureFlags";
+import { useEffect } from "react";
 
 const formatPln = (grosze: number) =>
   (grosze / 100).toLocaleString("pl-PL", {
@@ -37,9 +39,21 @@ const options: {
 ];
 
 const PaymentMethodPicker = ({ value, onChange }: Props) => {
+  const codEnabled = useFeatureFlag("cod_payment_enabled");
+
+  const visibleOptions = codEnabled
+    ? options
+    : options.filter((opt) => opt.value === "online");
+
+  useEffect(() => {
+    if (!codEnabled && value !== "online") {
+      onChange("online");
+    }
+  }, [codEnabled, value, onChange]);
+
   return (
     <div className="space-y-3">
-      {options.map((opt) => {
+      {visibleOptions.map((opt) => {
         const selected = value === opt.value;
         const Icon = opt.icon;
         return (
@@ -51,14 +65,16 @@ const PaymentMethodPicker = ({ value, onChange }: Props) => {
                 : "border-border hover:border-primary/50"
             }`}
           >
-            <input
-              type="radio"
-              name="payment-method"
-              value={opt.value}
-              checked={selected}
-              onChange={() => onChange(opt.value)}
-              className="mt-1 accent-primary"
-            />
+            {visibleOptions.length > 1 && (
+              <input
+                type="radio"
+                name="payment-method"
+                value={opt.value}
+                checked={selected}
+                onChange={() => onChange(opt.value)}
+                className="mt-1 accent-primary"
+              />
+            )}
             <Icon className="w-5 h-5 text-primary shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-3 flex-wrap">

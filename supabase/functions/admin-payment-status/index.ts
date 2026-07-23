@@ -39,6 +39,7 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false, autoRefreshToken: false },
     });
     const token = authHeader.replace("Bearer ", "");
     const { data: claimsData, error: claimsErr } = await supabase.auth.getClaims(token);
@@ -53,7 +54,9 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (!roleRow) return jsonResp({ error: "forbidden" }, 403);
 
-    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
 
     if (req.method === "POST") {
       const body = await req.json().catch(() => null);
